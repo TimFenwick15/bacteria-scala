@@ -1,90 +1,76 @@
-class Bacteria(xCoordinate:Int = -1, yCoordinate:Int = -1, initialState:Int = 0) {
-  val localX = xCoordinate
-  val localY = yCoordinate
-  var localState = initialState
-  var localNeighbourCount = 0
-  def x = localX
-  def y = localY
-  def state = localState
-  def state_(n:Int) = { localState = n }
-  def neighbourCount = localNeighbourCount
-  def neighbourCount_(n:Int) = { localNeighbourCount = n } // is this a normal way to name setters?
-
-  def print:Unit = println("x = " + localX + ", y = " + localY + ", state = " + localState + ", neighbourCount = " + localNeighbourCount) // for testing, to delete
+class Bacteria(xCoordinate:Int, yCoordinate:Int, initialState:Int) {
+  val x = xCoordinate
+  val y = yCoordinate
+  var state = initialState
+  var neighbourCount = 0
+  def addNeighbour = { neighbourCount = neighbourCount + 1 }
+  def changeState = {
+    state match {
+      case 0 => state = 1
+      case 1 => state = 0
+    }
+  }
 }
 
 object Bacteria {
-  def hashFunction(x:Int, y:Int):String = x + "," + y
+  // Make a string to use as a Map key
+  def coordinateString(x:Int, y:Int):String = x + "," + y
 
-  def printAll(bacteriaList:Map[String, Bacteria]):Unit = bacteriaList foreach (x => x._2.print)
+  // For (x,y), return each positive neighbouring coordinate and self
+  def neighbours(x:Int, y:Int):Set[(Int, Int)] = for (_x <- Set(math.abs(x - 1), x, x + 1); _y <- Set(math.abs(y - 1), y, y + 1)) yield (_x, _y)
 
   def main(args:Array[String]):Unit = {
 
-    // 1. Initial bacteria list with a method for insertion
+    // 1. Initial bacteria list. Function to add if not already in list
     var bacteriaList:Map[String, Bacteria] = Map()
     def bacteriaListAdd(x:Int, y:Int, state:Int):Bacteria = {
-      val key = hashFunction(x, y)
+      val key = coordinateString(x, y)
       bacteriaList.getOrElse(key, {
         bacteriaList = bacteriaList.updated(key, new Bacteria(x, y, state))
         bacteriaList(key)
       })
     }
 
+
     // 2. Read StdIn until an end line is reached
-    var data:Array[String] = Array()
-    var end = ""
-    while (end != "end") {
-      end = io.StdIn.readLine()
-      if (end != "end")
-        data = data :+ end
+    var in = ""
+    while (in != "end") {
+      in = io.StdIn.readLine()
+      if (in != "end")
+        bacteriaListAdd(in.split(",")(0).toInt, in.split(",")(1).toInt, 1)
     }
 
 
-    // 3. Create object Map[String, Bacteria]. A map guarentees uniqueness - not being used because it overwrites instead of rejecting
-    data.foreach(x => bacteriaListAdd(x.split(",")(0).toInt, x.split(",")(1).toInt, 1))
-    
-
-    // 4. Find neighbours. Get the x and y, make surrounding 8 x,y pairs, add to neighbourList with new Bacteria
-    var neighbourList:Map[String, Bacteria] = Map()
-    bacteriaList foreach(bacteria => {
-      val x = bacteria._2.x
-      val y = bacteria._2.y
-      val xCoordinates = Set(Math.abs(x - 1), x ,x + 1)
-      val yCoordinates = Set(Math.abs(y - 1), y ,y + 1)
-      val neighbourCoordinatesAndSelf = for (xCoordinates_ <- xCoordinates; yCoordinates_ <- yCoordinates) yield (xCoordinates_, yCoordinates_)
-      val neighbourCoordinates = neighbourCoordinatesAndSelf filter (coordinates => !(coordinates._1 == x && coordinates._2 == y) )
-      val neighbourBacteria = neighbourCoordinates map((site:(Int,Int)) => hashFunction(site._1, site._2) -> new Bacteria(site._1, site._2) )
-      neighbourList = neighbourList ++ neighbourBacteria.toMap
-    })
-
-    //val newKeys = neighbourList.keySet.diff(bacteriaList.keySet)
-    neighbourList foreach(x => bacteriaListAdd(x._1.split(",")(0).toInt, x._1.split(",")(1).toInt, 0)) // if this works, it can be massively simplified, i only need the keylist from the block above
+    // 3. Find neighbours and add to list
+    bacteriaList foreach { bacteria =>
+      neighbours(bacteria._2.x, bacteria._2.y) foreach { neighbour =>
+        bacteriaListAdd(neighbour._1, neighbour._2, 0)
+      }
+    }
 
 
-    // 5. Add a live neighbour count to each bacteria
-    bacteriaList foreach(currentSite => {
-      var neighbourCount = 0
-      bacteriaList foreach(neighbour => {
-        if (neighbour._2.state == 1 && Math.abs(currentSite._2.x - neighbour._2.x) <= 1 && Math.abs(currentSite._2.y - neighbour._2.y) <= 1 && !(currentSite._2.x == neighbour._2.x && currentSite._2.y == neighbour._2.y))
-          neighbourCount = neighbourCount + 1
+    // 4. Add a live neighbour count to each bacteria
+    bacteriaList foreach (bacteria => {
+      bacteriaList foreach (neighbour => {
+        if (neighbour._2.state == 1 &&
+            math.abs(bacteria._2.x - neighbour._2.x) <= 1 && math.abs(bacteria._2.y - neighbour._2.y) <= 1 &&
+            !(bacteria._2.x == neighbour._2.x && bacteria._2.y == neighbour._2.y))
+          bacteria._2.addNeighbour
       })
-      currentSite._2.neighbourCount_(neighbourCount)
     })
 
 
-    // 6. Apply rules and output
-    bacteriaList foreach(bacteria => {
+    // 5. Apply rules
+    bacteriaList foreach (bacteria => {
       if (bacteria._2.state == 1 && (bacteria._2.neighbourCount < 2 || bacteria._2.neighbourCount > 3))
-        bacteria._2.state_(0)
+        bacteria._2.changeState
       if (bacteria._2.state == 0 && bacteria._2.neighbourCount == 3)
-        bacteria._2.state_(1)
+        bacteria._2.changeState
     })
 
-    bacteriaList foreach(bacteria => {
-      if (bacteria._2.state == 1)
-        println(hashFunction(bacteria._2.x, bacteria._2.y))
-    })
+    
+    // 6. Output
+    bacteriaList foreach { bacteria => if (bacteria._2.state == 1) println(coordinateString(bacteria._2.x, bacteria._2.y)) }
     println("end")
   }
 }
-
